@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Midnight Roster — Ankahee</title>
+<style>
+  :root {
+    --bg: #FAF6F2;
+    --surface: #FFFFFF;
+    --surface-soft: #F3EEE8;
+    --primary: #5B4B7C;
+    --primary-dark: #443A5E;
+    --primary-soft: #EDE8F3;
+    --success: #4F8A6D;
+    --success-soft: #E7F1EB;
+    --risk: #B8524A;
+    --risk-soft: #F7E9E7;
+    /* New for this tool: a second role identity color, orthogonal to the
+       open/filled/self status colors above. Used ONLY as a constant-color
+       tag on Support rows so Listening vs Support reads at a glance,
+       independent of whether the row is open/filled/self. Not yet folded
+       into the shared design-tokens.css master file — flagging that. */
+    --support: #B8863A;
+    --support-dark: #8C6528;
+    --support-soft: #F3E8D3;
+    --text: #2E2A33;
+    --text-muted: #7A7480;
+    --border: #E4DDD6;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --shadow: 0 2px 10px rgba(46, 42, 51, 0.06);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  button, .cal-cell, .chip, .month-tab, .icon-btn, .refresh-btn, .text-link-btn, .combo-item {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 60px;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .topbar { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; }
+  .topbar img { height: 32px; width: 32px; object-fit: contain; border-radius: 8px; flex-shrink: 0; }
+  .topbar .titles { flex: 1; }
+  .topbar h1 { margin: 0; font-size: 18px; color: var(--primary-dark); }
+  .topbar p { margin: 2px 0 0; font-size: 13px; color: var(--text-muted); }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 999px; border: 1.5px solid var(--border);
+    background: var(--surface); color: var(--primary); font-size: 16px; font-weight: 700;
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:active { background: var(--primary-soft); }
+
+  .identity-select { padding: 16px 20px 4px; }
+  .identity-select label { font-size: 14px; color: var(--text-muted); display: block; margin-bottom: 8px; }
+  .identity-select .btn { width: 100%; margin-top: 12px; }
+  .identity-select .err { color: var(--risk); font-size: 13px; margin-top: 8px; display: none; }
+
+  /* ---------- SEARCHABLE COMBOBOX (name pickers) ---------- */
+  .combo-wrap { position: relative; }
+  .combo-wrap input[type="text"] {
+    width: 100%; padding: 12px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); font-size: 16px; background: var(--surface); color: var(--text);
+  }
+  .combo-wrap input[type="text"]:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .combo-list {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    max-height: 220px; overflow-y: auto;
+    background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow); z-index: 25;
+  }
+  .combo-item {
+    padding: 12px 14px; font-size: 15px; cursor: pointer; min-height: 44px;
+    display: flex; align-items: center;
+  }
+  .combo-item:hover, .combo-item:active { background: var(--primary-soft); }
+  .combo-empty { padding: 12px 14px; font-size: 14px; color: var(--text-muted); }
+
+  .identity-bar {
+    background: var(--primary-soft); padding: 12px 20px; font-size: 14px; color: var(--primary-dark);
+    display: none; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  .identity-bar button {
+    background: none; border: none; color: var(--primary); font-size: 13px;
+    text-decoration: underline; cursor: pointer; padding: 4px;
+  }
+
+  main { padding: 16px; max-width: 640px; margin: 0 auto; }
+
+  /* ---------- ROLE CHIP (constant color, independent of open/filled/self) ---------- */
+  .tag-chip {
+    font-size: 9px; font-weight: 800; letter-spacing: 0.3px; border-radius: 5px;
+    padding: 1.5px 4px; flex-shrink: 0; line-height: 1.35;
+  }
+  .tag-chip.tag-Listening { background: var(--primary-soft); color: var(--primary-dark); }
+  .tag-chip.tag-Support { background: var(--support-soft); color: var(--support-dark); }
+
+  .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; padding: 0 4px; }
+  .legend .tag-chip { font-size: 10px; padding: 2px 6px; }
+  .legend-note { font-size: 12px; color: var(--text-muted); margin: 0 0 14px; padding: 0 4px; }
+
+  .toolbar-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
+  .text-link-btn {
+    background: none; border: none; color: var(--primary); font-size: 13px; font-weight: 600;
+    cursor: pointer; padding: 8px 4px; display: none;
+  }
+  .refresh-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: none; border: none;
+    color: var(--primary); font-size: 13px; font-weight: 600; cursor: pointer; padding: 8px 4px;
+  }
+  .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .refresh-btn svg { transition: transform 0.4s ease; }
+  .refresh-btn.spinning svg { animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .month-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .month-tab {
+    flex: 1; text-align: center; padding: 10px 6px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
+    font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px;
+  }
+  .month-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  .month-summary { margin-bottom: 10px; padding: 0 4px; }
+  .month-summary h2 { font-size: 15px; margin: 0 0 2px; color: var(--primary-dark); }
+  .month-summary .count { font-size: 12.5px; color: var(--text-muted); display: block; }
+
+  .calendar-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; }
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+  .cal-weekday { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); text-align: center; padding-bottom: 6px; }
+
+  .cal-cell {
+    min-height: 86px; min-width: 0; border-radius: var(--radius-sm); padding: 5px 4px;
+    display: flex; flex-direction: column; gap: 3px;
+    border: none; background: var(--surface-soft); cursor: pointer;
+  }
+  .cal-cell.empty { visibility: hidden; cursor: default; background: transparent; }
+  .cal-cell .day-num { font-size: 12px; font-weight: 700; color: var(--text); line-height: 1; margin-bottom: 1px; }
+  .cal-cell.prelaunch, .cal-cell.past { opacity: 0.42; cursor: default; }
+
+  /* Row background/border communicates STATUS (open/filled/self) — role
+     identity lives only in the .tag-chip inside, so the two channels
+     (which role / what status) never fight for the same color. */
+  .role-row { display: flex; align-items: center; gap: 4px; border-radius: 6px; padding: 3px 5px; min-height: 19px; }
+  .role-row .val { flex: 1; min-width: 0; font-size: 10.5px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .role-row.open { border: 1px dashed var(--border); background: var(--surface); }
+  .role-row.open .val { color: var(--text-muted); font-style: italic; }
+  .role-row.filled { background: var(--surface-soft); border: 1px solid var(--border); }
+  .role-row.filled .val { color: var(--text); }
+  .role-row.self.role-Listening { background: var(--primary-dark); }
+  .role-row.self.role-Support { background: var(--support-dark); }
+  .role-row.self .val { color: #fff; font-weight: 600; }
+
+  /* Phones: instead of squeezing 7 columns to fit (which breaks names)
+     or switching to a different layout (a day-strip — tried, wasn't the
+     right feel), the grid stays exactly as-is, just wider than the
+     screen: fixed-width columns instead of 1fr, wrapped in one scroll
+     region. The header row and every week row are part of the same
+     grid, so they pan sideways together automatically — no separate
+     sync logic needed. Always starts scrolled to Sunday. */
+  @media (max-width: 480px) {
+    .calendar-card { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; }
+    .calendar-card::-webkit-scrollbar { display: none; }
+    .calendar-card::after {
+      content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 26px;
+      background: linear-gradient(to right, rgba(255,255,255,0), var(--surface));
+      pointer-events: none; border-radius: 0 var(--radius) var(--radius) 0;
+    }
+    .calendar-grid { grid-template-columns: repeat(7, 74px); gap: 5px; width: max-content; }
+    /* Header + day cells are one flat list of direct grid children, 7
+       per row, so nth-child(7n+1)/(7n+5) picks out every row's Sunday
+       and Thursday column consistently — the only two x-positions a
+       swipe is allowed to settle on. Every other column is scrollable
+       past but never a stopping point, so force/speed of the swipe
+       can't land you a random 1–2 days into a page anymore. */
+    .calendar-grid > :nth-child(7n+1),
+    .calendar-grid > :nth-child(7n+5) { scroll-snap-align: start; }
+  }
+
+  .overlay { position: fixed; inset: 0; background: rgba(46,42,51,0.4); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+  .overlay.hidden { display: none; }
+  .sheet { background: var(--surface); border-radius: 14px 14px 0 0; padding: 20px; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); }
+  @media (min-width: 520px) { .overlay { align-items: center; } .sheet { border-radius: var(--radius); } }
+  .sheet h3 { margin: 0 0 12px; font-size: 17px; color: var(--text); }
+  .sheet p { margin: 0 0 10px; font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+  .sheet-actions { display: flex; flex-direction: column; gap: 10px; }
+  .sheet-actions-row { flex-direction: row; }
+  .sheet-actions-row .btn { flex: 1; padding: 0 6px; font-size: 12.5px; }
+  .sheet label { font-size: 13px; color: var(--text-muted); display: block; margin: 12px 0 6px; }
+  .sheet select {
+    width: 100%; padding: 12px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); font-size: 16px; background: var(--surface); color: var(--text);
+  }
+  .sheet .subnote { font-size: 12px; color: var(--text-muted); margin-top: -2px; margin-bottom: 4px; }
+
+  .sheet-role-block { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .sheet-role-block:last-of-type { border-bottom: none; margin-bottom: 8px; padding-bottom: 0; }
+  .sheet-role-label { display: flex; align-items: center; gap: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: var(--primary-dark); margin-bottom: 4px; }
+  .sheet-role-status { font-size: 14px; color: var(--text); margin: 0 0 10px; }
+
+  .btn { border: none; border-radius: 999px; padding: 0 20px; height: 48px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:active { background: var(--primary-dark); }
+  .btn-secondary { background: var(--surface); color: var(--primary); border: 1.5px solid var(--border); }
+  .btn-risk { background: var(--risk); color: #fff; }
+  .btn-text { background: none; color: var(--text-muted); text-decoration: underline; min-height: 44px; padding: 8px; display: flex; align-items: center; justify-content: center; }
+  .sheet p, .sheet h3 { -webkit-user-select: none; user-select: none; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-sm { height: 40px; padding: 0 16px; font-size: 13.5px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--success); color: #fff; padding: 14px 20px; border-radius: 12px;
+    display: flex; align-items: center; gap: 10px; font-size: 14px; box-shadow: var(--shadow);
+    opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease; z-index: 60; max-width: 90%;
+    pointer-events: none;
+  }
+  .toast.show { pointer-events: auto; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--risk); }
+  .check { stroke-dasharray: 20; stroke-dashoffset: 20; animation: draw 0.4s ease forwards 0.1s; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  .loading { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <img src="Logo.png" alt="Ankahee logo" onerror="this.style.display='none'">
+  <div class="titles">
+    <h1>Midnight Roster</h1>
+    <p>10pm – 12am shift · Listening &amp; Support</p>
+  </div>
+  <button class="icon-btn" id="helpBtn" aria-label="How this works">?</button>
+</header>
+
+<div id="identitySelectWrap" class="identity-select" style="display:none;">
+  <label for="volunteerSearch">Who's this?</label>
+  <div class="combo-wrap">
+    <input type="text" id="volunteerSearch" autocomplete="off" placeholder="Type your name…">
+    <div class="combo-list" id="volunteerListEl" style="display:none;"></div>
+  </div>
+  <button class="btn btn-primary" id="identityContinueBtn">Continue</button>
+  <p class="err" id="identityError">Please select your name to continue.</p>
+</div>
+
+<div id="identityBar" class="identity-bar">
+  <span>Logging as: <strong id="identityName"></strong></span>
+  <button id="identityChangeBtn">Not you?</button>
+</div>
+
+<main>
+  <div class="legend">
+    <span class="tag-chip tag-Listening">L</span><span>Listening</span>
+    <span class="tag-chip tag-Support">S</span><span>Support</span>
+  </div>
+  <p class="legend-note">Dashed = open · Plain fill = taken by someone else · Solid colour = you.</p>
+
+  <div class="toolbar-row">
+    <button class="text-link-btn" id="monthNavBtn">‹ Previous months</button>
+    <button class="refresh-btn" id="refreshBtn">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3.5H10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Refresh
+    </button>
+  </div>
+  <div id="monthTabs" class="month-tabs"></div>
+  <div id="monthSummary" class="month-summary"></div>
+  <div id="content" class="loading">Loading roster…</div>
+</main>
+
+<div id="overlay" class="overlay hidden">
+  <div class="sheet" id="sheetContent"></div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+  const APP_URL = 'https://script.google.com/macros/s/AKfycbw2vU4QBqcU5m0PzmGyuYjgcF02m-5NDJQnioRTlZadhNXwWTTKpYxV6rRKTkMoRq8/exec';
+  const NAME_KEY = 'ankahee_volunteer_name';
+  const LAUNCH_DATE = '2026-09-10'; // hardcoded start date for the shift
+  const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const ROLES = ['Listening', 'Support'];
+  const ROLE_TAG = { Listening: 'L', Support: 'S' };
+
+  // volunteers: [{ name, roles: ['Listening'] | ['Support'] | ['Listening','Support'] }] — active-only, backend filters
+  // roster: [{ date, volunteer, role }]
+  let volunteers = [];
+  let roster = [];
+  let currentVolunteer = sessionStorage.getItem(NAME_KEY) || '';
+  let selectedIdentityName = null; // set only when a combo-item is actually clicked
+
+  // Month window: the live default is always "today's month + next 2"
+  // (or launch month + next 2, pre-launch). monthsBackOffset shifts that
+  // whole 3-tab window backward one month at a time for browsing history;
+  // it's a transient viewing state, not a stored preference — it resets
+  // to 0 (the live window) on every fresh load.
+  let monthsBackOffset = 0;
+  // Which calendar month (year+month) is the active tab, tracked by
+  // actual month rather than tab index — so if the window shifts while
+  // that month is still visible, the same month stays selected instead
+  // of the selection jumping around.
+  let activeYearMonth = null;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function toDateStr(y, m, d) { return `${y}-${pad(m)}-${pad(d)}`; }
+  function todayStr() { const n = new Date(); return toDateStr(n.getFullYear(), n.getMonth() + 1, n.getDate()); }
+  function sameName(a, b) { return String(a).trim().toLowerCase() === String(b).trim().toLowerCase(); }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function sortedNames(list) { return [...list].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })); }
+
+  function rolesOf(name) {
+    const v = volunteers.find(v => sameName(v.name, name));
+    return v ? v.roles : [];
+  }
+
+  function formatLabel(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const weekday = dt.toLocaleDateString('en-IN', { weekday: 'short' });
+    const month = dt.toLocaleDateString('en-IN', { month: 'short' });
+    return `${weekday}, ${d} ${month}`;
+  }
+
+  // ---------- SEARCHABLE COMBOBOX (shared by identity / swap / replace pickers) ----------
+  // Restricts to a real name from `options` (a searchable combobox, not free
+  // text) — per the design spec's rule for selection-only fields. Typing
+  // filters live; a value only "counts" once a suggestion is actually
+  // tapped, so onPick fires with the picked name, or null the moment the
+  // input no longer matches what was picked (keeps stale selections from
+  // silently surviving further typing).
+  function wireCombobox(inputEl, listEl, options, onPick, formatLabel) {
+    formatLabel = formatLabel || (o => o);
+    function renderMatches(q) {
+      const query = q.trim().toLowerCase();
+      const matches = query ? options.filter(o => o.toLowerCase().includes(query)) : options;
+      listEl.innerHTML = matches.length
+        ? matches.map(o => `<div class="combo-item" data-value="${escapeHtml(o)}">${escapeHtml(formatLabel(o))}</div>`).join('')
+        : `<div class="combo-empty">No match — check spelling</div>`;
+      listEl.style.display = 'block';
+    }
+    inputEl.addEventListener('focus', () => renderMatches(inputEl.value));
+    inputEl.addEventListener('input', () => { onPick(null); renderMatches(inputEl.value); });
+    inputEl.addEventListener('blur', () => { setTimeout(() => { listEl.style.display = 'none'; }, 150); });
+    listEl.addEventListener('click', (e) => {
+      const item = e.target.closest('.combo-item');
+      if (!item) return;
+      const val = item.dataset.value;
+      inputEl.value = val;
+      listEl.style.display = 'none';
+      onPick(val);
+    });
+  }
+
+  // ---------- MONTH WINDOW ----------
+
+  // The live anchor month: whichever is later, today's month or the
+  // shift's launch month — so pre-launch the view starts at the launch
+  // month instead of showing empty earlier months.
+  function liveAnchorYM() {
+    const today = new Date();
+    const [ly, lm] = LAUNCH_DATE.split('-').map(Number);
+    const launch = new Date(ly, lm - 1, 1);
+    const anchor = today > launch ? today : launch;
+    return { year: anchor.getFullYear(), month: anchor.getMonth() + 1 };
+  }
+
+  function ymIndex(y, m) { return y * 12 + (m - 1); }
+
+  // How many months back from the live anchor we're allowed to browse —
+  // never earlier than the shift's launch month, since no roster exists
+  // before that.
+  function maxBackOffset() {
+    const a = liveAnchorYM();
+    const [ly, lm] = LAUNCH_DATE.split('-').map(Number);
+    return Math.max(0, ymIndex(a.year, a.month) - ymIndex(ly, lm));
+  }
+
+  // The 3 months currently shown in the tab row, given monthsBackOffset.
+  function monthList() {
+    const a = liveAnchorYM();
+    const startIdx = ymIndex(a.year, a.month) - monthsBackOffset;
+    const months = [];
+    for (let i = 0; i < 3; i++) {
+      const idx = startIdx + i;
+      months.push({ year: Math.floor(idx / 12), month: (idx % 12) + 1 });
+    }
+    return months;
+  }
+
+  // Resolves which tab is active for the current window, keeping the same
+  // calendar month selected across a window shift when possible; falls
+  // back to the first (leftmost) tab otherwise — which, on stepping back,
+  // is exactly the newly revealed earlier month.
+  function getActiveMonth() {
+    const months = monthList();
+    let idx = activeYearMonth
+      ? months.findIndex(m => m.year === activeYearMonth.year && m.month === activeYearMonth.month)
+      : -1;
+    if (idx === -1) idx = 0;
+    activeYearMonth = { year: months[idx].year, month: months[idx].month };
+    return { months, idx, current: months[idx] };
+  }
+
+  function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
+
+  function stepBack() {
+    monthsBackOffset = Math.min(monthsBackOffset + 1, maxBackOffset());
+    renderMonthNav();
+    renderTabs();
+    renderCalendar();
+  }
+
+  function backToCurrent() {
+    monthsBackOffset = 0;
+    renderMonthNav();
+    renderTabs();
+    renderCalendar();
+  }
+
+  function renderMonthNav() {
+    const btn = document.getElementById('monthNavBtn');
+    if (monthsBackOffset === 0) {
+      if (maxBackOffset() > 0) {
+        btn.style.display = 'inline-flex';
+        btn.textContent = '‹ Previous months';
+      } else {
+        btn.style.display = 'none';
+      }
+    } else {
+      btn.style.display = 'inline-flex';
+      btn.textContent = 'Back to current ›';
+    }
+  }
+
+  document.getElementById('monthNavBtn').addEventListener('click', () => {
+    if (monthsBackOffset === 0) stepBack(); else backToCurrent();
+  });
+
+  async function loadData() {
+    try {
+      const res = await fetch(APP_URL);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Failed to load');
+      volunteers = json.data.volunteers;
+      roster = json.data.roster;
+      applyNameFromUrl();
+      setupIdentityCombobox();
+      renderIdentity();
+      renderMonthNav();
+      renderTabs();
+      renderCalendar();
+    } catch (err) {
+      document.getElementById('content').innerHTML =
+        `<div class="loading">Couldn't load the roster. Check your connection and reload the page.</div>`;
+    }
+  }
+
+  // v2: ?name=<Name> (sent by the Call Log's roster nudge) pre-selects
+  // that volunteer, as if they'd picked it in the name box. Only honoured
+  // if it matches an active volunteer from the backend's list; anything
+  // else is ignored silently and the normal picker shows. The parameter
+  // is removed from the address bar right away, so a refresh, bookmark or
+  // shared link doesn't keep carrying the name.
+  function applyNameFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('name');
+    if (raw === null) return;
+    params.delete('name');
+    const qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+    const match = volunteers.find(v => sameName(v.name, raw));
+    if (!match) return;
+    currentVolunteer = match.name;
+    sessionStorage.setItem(NAME_KEY, currentVolunteer);
+  }
+
+  function setupIdentityCombobox() {
+    const input = document.getElementById('volunteerSearch');
+    const list = document.getElementById('volunteerListEl');
+    const names = sortedNames(volunteers.map(v => v.name));
+    selectedIdentityName = null;
+    input.value = '';
+    wireCombobox(input, list, names, (val) => {
+      selectedIdentityName = val;
+      if (val) document.getElementById('identityError').style.display = 'none';
+    }, (name) => `${name} (${rolesOf(name).join(', ')})`);
+  }
+
+  function renderIdentity() {
+    const bar = document.getElementById('identityBar');
+    const selWrap = document.getElementById('identitySelectWrap');
+    if (currentVolunteer) {
+      bar.style.display = 'flex';
+      selWrap.style.display = 'none';
+      document.getElementById('identityName').textContent = currentVolunteer;
+    } else {
+      bar.style.display = 'none';
+      selWrap.style.display = 'block';
+    }
+  }
+
+  document.getElementById('identityContinueBtn').addEventListener('click', () => {
+    const err = document.getElementById('identityError');
+    if (!selectedIdentityName) { err.style.display = 'block'; document.getElementById('volunteerSearch').focus(); return; }
+    err.style.display = 'none';
+    currentVolunteer = selectedIdentityName;
+    sessionStorage.setItem(NAME_KEY, currentVolunteer);
+    renderIdentity();
+    renderCalendar();
+  });
+
+  document.getElementById('identityChangeBtn').addEventListener('click', () => {
+    currentVolunteer = '';
+    sessionStorage.removeItem(NAME_KEY);
+    setupIdentityCombobox();
+    renderIdentity();
+    renderCalendar();
+  });
+
+  // ---------- TABS ----------
+  function renderTabs() {
+    const { months, idx } = getActiveMonth();
+    const wrap = document.getElementById('monthTabs');
+    wrap.innerHTML = months.map(({ year, month }, i) => {
+      const label = new Date(year, month - 1, 1).toLocaleDateString('en-IN', { month: 'short' });
+      return `<button class="month-tab ${i === idx ? 'active' : ''}" data-idx="${i}">${label}</button>`;
+    }).join('');
+    wrap.querySelectorAll('.month-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.idx, 10);
+        activeYearMonth = { year: months[i].year, month: months[i].month };
+        renderTabs();
+        renderCalendar();
+      });
+    });
+  }
+
+  // ---------- CALENDAR ----------
+  function claimsForDate(dateStr) { return roster.filter(r => r.date === dateStr); }
+  function claimsForDateRole(dateStr, role) { return roster.filter(r => r.date === dateStr && r.role === role); }
+  // A volunteer holds at most one role on a given date — find it, if any.
+  function myClaimOnDate(dateStr) {
+    if (!currentVolunteer) return null;
+    return roster.find(r => r.date === dateStr && sameName(r.volunteer, currentVolunteer)) || null;
+  }
+
+  function renderCalendar() {
+    const { year, month } = getActiveMonth().current;
+    const today = todayStr();
+    const dim = daysInMonth(year, month);
+
+    let listeningFilled = 0, supportFilled = 0, total = 0;
+    for (let d = 1; d <= dim; d++) {
+      const dateStr = toDateStr(year, month, d);
+      if (dateStr < LAUNCH_DATE) continue;
+      total++;
+      if (claimsForDateRole(dateStr, 'Listening').length > 0) listeningFilled++;
+      if (claimsForDateRole(dateStr, 'Support').length > 0) supportFilled++;
+    }
+
+    const monthName = new Date(year, month - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+    document.getElementById('monthSummary').innerHTML =
+      `<h2>${monthName}</h2><span class="count">Listening: ${listeningFilled} of ${total} days · Support: ${supportFilled} of ${total} days</span>`;
+
+    const firstDow = new Date(year, month - 1, 1).getDay();
+    let cellsHtml = WEEKDAY_LABELS.map(w => `<div class="cal-weekday">${w}</div>`).join('');
+    for (let i = 0; i < firstDow; i++) cellsHtml += `<div class="cal-cell empty"></div>`;
+
+    for (let d = 1; d <= dim; d++) {
+      const dateStr = toDateStr(year, month, d);
+      const isPrelaunch = dateStr < LAUNCH_DATE;
+      const isPast = !isPrelaunch && dateStr < today;
+      const claims = claimsForDate(dateStr);
+
+      let cls = 'cal-cell';
+      if (isPrelaunch) cls += ' prelaunch';
+      else if (isPast) cls += ' past';
+
+      let rowsHtml = '';
+      let titleParts = [];
+      if (!isPrelaunch) {
+        ROLES.forEach(role => {
+          const roleClaims = claims.filter(c => c.role === role);
+          const isSelf = currentVolunteer && roleClaims.some(c => sameName(c.volunteer, currentVolunteer));
+          const statusCls = isSelf ? 'self' : roleClaims.length ? 'filled' : 'open';
+          let val;
+          if (roleClaims.length === 0) {
+            val = 'Open';
+          } else {
+            const first = roleClaims.find(c => isSelf && sameName(c.volunteer, currentVolunteer)) || roleClaims[0];
+            const extra = roleClaims.length - 1;
+            val = escapeHtml(first.volunteer) + (extra > 0 ? ` +${extra}` : '');
+            titleParts.push(`${role}: ${roleClaims.map(c => c.volunteer).join(', ')}`);
+          }
+          rowsHtml += `<div class="role-row role-${role} ${statusCls}"><span class="tag-chip tag-${role}">${ROLE_TAG[role]}</span><span class="val">${val}</span></div>`;
+        });
+      }
+
+      // Past dates (including in browsed-back months) are read-only —
+      // same rule as today's near-term dates, no new logic needed.
+      const clickable = !isPrelaunch && !isPast;
+      const titleAttr = titleParts.length ? `title="${escapeHtml(titleParts.join(' · '))}"` : '';
+      cellsHtml += `<div class="${cls}" ${clickable ? `data-date="${dateStr}"` : ''} ${titleAttr}>
+        <div class="day-num">${d}</div>
+        ${rowsHtml}
+      </div>`;
+    }
+
+    document.getElementById('content').className = '';
+    document.getElementById('content').innerHTML = `<div class="calendar-card"><div class="calendar-grid">${cellsHtml}</div></div>`;
+
+    document.querySelectorAll('.cal-cell[data-date]').forEach(el => {
+      el.addEventListener('click', () => onDateTap(el.dataset.date));
+    });
+  }
+
+  // ---------- DATE TAP ----------
+  function roleHeader(role) {
+    return `<span class="tag-chip tag-${role}">${ROLE_TAG[role]}</span>${role}`;
+  }
+
+  function onDateTap(dateStr) {
+    const claims = claimsForDate(dateStr);
+
+    if (!currentVolunteer) {
+      const parts = ROLES.map(role => {
+        const roleClaims = claims.filter(c => c.role === role);
+        const who = roleClaims.length ? roleClaims.map(c => escapeHtml(c.volunteer)).join(', ') : 'Open';
+        return `<div class="sheet-role-block"><div class="sheet-role-label">${roleHeader(role)}</div><p class="sheet-role-status">${who}</p></div>`;
+      }).join('');
+      showSheet(`
+        <h3>${formatLabel(dateStr)}</h3>
+        ${parts}
+        <p style="margin-top:-4px;">Select your name above to claim or manage a date.</p>
+        <div class="sheet-actions"><button class="btn btn-text" id="cancelSheetBtn">Close</button></div>
+      `);
+      bindCancel();
+      return;
+    }
+
+    const myRoles = rolesOf(currentVolunteer);
+    const myClaim = myClaimOnDate(dateStr);
+
+    let html = `<h3>${formatLabel(dateStr)}</h3>`;
+    ROLES.forEach(role => {
+      const roleClaims = claims.filter(c => c.role === role);
+      const isSelfHere = myClaim && myClaim.role === role;
+      const who = roleClaims.length ? roleClaims.map(c => escapeHtml(c.volunteer)).join(', ') : 'Open';
+
+      html += `<div class="sheet-role-block"><div class="sheet-role-label">${roleHeader(role)}</div><p class="sheet-role-status">${who}</p>`;
+
+      if (isSelfHere) {
+        html += `<div class="sheet-actions sheet-actions-row">
+          <button class="btn btn-secondary btn-sm" data-role="${role}" id="swapBtn_${role}">Swap</button>
+          <button class="btn btn-secondary btn-sm" data-role="${role}" id="replaceBtn_${role}">Replace</button>
+          <button class="btn btn-risk btn-sm" data-role="${role}" id="deleteBtn_${role}">Remove</button>
+        </div>`;
+      } else if (!myClaim && myRoles.includes(role)) {
+        html += `<div class="sheet-actions"><button class="btn btn-primary btn-sm" data-role="${role}" id="claimBtn_${role}">Claim as ${role}</button></div>`;
+      } else if (myClaim && myClaim.role !== role) {
+        html += `<p class="subnote">You're already on this date as ${myClaim.role} — one role per date.</p>`;
+      }
+      html += `</div>`;
+    });
+    html += `<div class="sheet-actions"><button class="btn btn-text" id="cancelSheetBtn">Close</button></div>`;
+
+    showSheet(html);
+    bindCancel();
+
+    ROLES.forEach(role => {
+      const claimBtn = document.getElementById(`claimBtn_${role}`);
+      if (claimBtn) claimBtn.addEventListener('click', async () => { closeSheet(); await doClaim(dateStr, role); });
+
+      const swapBtn = document.getElementById(`swapBtn_${role}`);
+      if (swapBtn) swapBtn.addEventListener('click', () => openSwapForm(dateStr, role));
+
+      const replaceBtn = document.getElementById(`replaceBtn_${role}`);
+      if (replaceBtn) replaceBtn.addEventListener('click', () => openReplaceForm(dateStr, role, claims));
+
+      const deleteBtn = document.getElementById(`deleteBtn_${role}`);
+      if (deleteBtn) deleteBtn.addEventListener('click', () => openDeleteConfirm(dateStr, role));
+    });
+  }
+
+  function bindCancel() {
+    const btn = document.getElementById('cancelSheetBtn');
+    if (btn) btn.addEventListener('click', closeSheet);
+  }
+
+  // ---------- SWAP ----------
+  function volunteerFutureDatesForRole(name, role, excludeDate) {
+    const today = todayStr();
+    return roster
+      .filter(r => sameName(r.volunteer, name) && r.role === role && r.date >= today && r.date !== excludeDate)
+      .map(r => r.date)
+      .sort();
+  }
+
+  function openSwapForm(dateA, role) {
+    const others = sortedNames(volunteers.filter(v => v.roles.includes(role) && !sameName(v.name, currentVolunteer)).map(v => v.name));
+    showSheet(`
+      <h3>Swap ${formatLabel(dateA)} (${role})</h3>
+      <p>Type who you're swapping with — they must already have a ${role.toLowerCase()} date claimed.</p>
+      <label for="swapVolunteerSearch">Swap with</label>
+      <div class="combo-wrap">
+        <input type="text" id="swapVolunteerSearch" autocomplete="off" placeholder="Type a name…">
+        <div class="combo-list" id="swapVolunteerListEl" style="display:none;"></div>
+      </div>
+      <label for="swapDate">Their date</label>
+      <select id="swapDate" disabled><option value="">Select a volunteer first</option></select>
+      <p class="subnote" id="swapNote"></p>
+      <div class="sheet-actions">
+        <button class="btn btn-primary" id="confirmSwapBtn" disabled>Confirm swap</button>
+        <button class="btn btn-text" id="cancelSheetBtn">Cancel</button>
+      </div>
+    `);
+    bindCancel();
+
+    const input = document.getElementById('swapVolunteerSearch');
+    const list = document.getElementById('swapVolunteerListEl');
+    const dateSel = document.getElementById('swapDate');
+    const note = document.getElementById('swapNote');
+    const confirmBtn = document.getElementById('confirmSwapBtn');
+    // Dates where I already hold a claim (any role) — I can't take on a second
+    // date's role there without breaking the one-role-per-date rule.
+    const myBusyDates = new Set(roster.filter(r => sameName(r.volunteer, currentVolunteer)).map(r => r.date));
+    let pickedY = null;
+
+    function onVolunteerPicked(y) {
+      pickedY = y;
+      confirmBtn.disabled = true;
+      dateSel.value = '';
+      if (!y) {
+        dateSel.disabled = true;
+        dateSel.innerHTML = '<option value="">Select a volunteer first</option>';
+        note.textContent = '';
+        return;
+      }
+      const dates = volunteerFutureDatesForRole(y, role, dateA).filter(d => !myBusyDates.has(d));
+      if (dates.length === 0) {
+        dateSel.disabled = true;
+        dateSel.innerHTML = '<option value="">No available dates to swap</option>';
+        note.textContent = `${y} has no other upcoming ${role.toLowerCase()} date that works.`;
+        return;
+      }
+      dateSel.disabled = false;
+      dateSel.innerHTML = '<option value="">Select their date</option>' +
+        dates.map(d => `<option value="${d}">${formatLabel(d)}</option>`).join('');
+      note.textContent = '';
+    }
+
+    wireCombobox(input, list, others, onVolunteerPicked);
+    dateSel.addEventListener('change', () => { confirmBtn.disabled = !dateSel.value; });
+
+    confirmBtn.addEventListener('click', async () => {
+      const y = pickedY, dateB = dateSel.value;
+      closeSheet();
+      await doSwap(dateA, role, dateB, y);
+    });
+  }
+
+  // ---------- REPLACE ----------
+  function openReplaceForm(dateStr, role, claims) {
+    // A replacement can't already hold any role on this date.
+    const alreadyBusy = new Set(claims.map(c => c.volunteer.trim().toLowerCase()));
+    const eligible = sortedNames(volunteers.filter(v => v.roles.includes(role) && !alreadyBusy.has(v.name.trim().toLowerCase())).map(v => v.name));
+    showSheet(`
+      <h3>Replace on ${formatLabel(dateStr)} (${role})</h3>
+      <p>They'll take over this date fully — you'll be removed.</p>
+      <label for="replaceVolunteerSearch">Replace with</label>
+      <div class="combo-wrap">
+        <input type="text" id="replaceVolunteerSearch" autocomplete="off" placeholder="Type a name…">
+        <div class="combo-list" id="replaceVolunteerListEl" style="display:none;"></div>
+      </div>
+      <div class="sheet-actions">
+        <button class="btn btn-primary" id="confirmReplaceBtn" disabled>Confirm replace</button>
+        <button class="btn btn-text" id="cancelSheetBtn">Cancel</button>
+      </div>
+    `);
+    bindCancel();
+    const input = document.getElementById('replaceVolunteerSearch');
+    const list = document.getElementById('replaceVolunteerListEl');
+    const confirmBtn = document.getElementById('confirmReplaceBtn');
+    let pickedY = null;
+    wireCombobox(input, list, eligible, (y) => { pickedY = y; confirmBtn.disabled = !y; });
+    confirmBtn.addEventListener('click', async () => {
+      const y = pickedY;
+      closeSheet();
+      await doReplace(dateStr, role, y);
+    });
+  }
+
+  // ---------- DELETE ----------
+  function openDeleteConfirm(dateStr, role) {
+    showSheet(`
+      <h3>Remove yourself from ${formatLabel(dateStr)} (${role})?</h3>
+      <p>This date will show ${role} as Open until someone else claims it.</p>
+      <div class="sheet-actions">
+        <button class="btn btn-risk" id="confirmDeleteBtn">Remove me</button>
+        <button class="btn btn-text" id="cancelSheetBtn">Cancel</button>
+      </div>
+    `);
+    bindCancel();
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+      closeSheet();
+      await doDelete(dateStr, role);
+    });
+  }
+
+  // ---------- API CALLS ----------
+  async function doClaim(dateStr, role) {
+    try {
+      const res = await postAction({ action: 'claim', date: dateStr, volunteer: currentVolunteer, role });
+      if (res.success) {
+        roster = res.data;
+        renderCalendar();
+        showToast(`You're on for ${formatLabel(dateStr)} (${role}). Thank you.`);
+      } else {
+        showToast(res.error || 'Could not save. Try again.', true);
+      }
+    } catch (e) { showToast('Connection problem. Try again.', true); }
+  }
+
+  async function doSwap(dateA, role, dateB, volunteerY) {
+    try {
+      const res = await postAction({ action: 'swap', dateA, role, volunteerX: currentVolunteer, dateB, volunteerY });
+      if (res.success) {
+        roster = res.data;
+        renderCalendar();
+        showToast(`Swapped — you're now on ${formatLabel(dateB)} (${role}).`);
+      } else {
+        showToast(res.error || 'Could not swap. Try again.', true);
+      }
+    } catch (e) { showToast('Connection problem. Try again.', true); }
+  }
+
+  async function doReplace(dateStr, role, volunteerY) {
+    try {
+      const res = await postAction({ action: 'replace', date: dateStr, role, volunteerX: currentVolunteer, volunteerY });
+      if (res.success) {
+        roster = res.data;
+        renderCalendar();
+        showToast(`Done — ${volunteerY} is now on ${formatLabel(dateStr)} (${role}).`);
+      } else {
+        showToast(res.error || 'Could not replace. Try again.', true);
+      }
+    } catch (e) { showToast('Connection problem. Try again.', true); }
+  }
+
+  async function doDelete(dateStr, role) {
+    try {
+      const res = await postAction({ action: 'delete', date: dateStr, role, volunteer: currentVolunteer });
+      if (res.success) {
+        roster = res.data;
+        renderCalendar();
+        showToast(`Removed. ${formatLabel(dateStr)} (${role}) is now open.`);
+      } else {
+        showToast(res.error || 'Could not remove. Try again.', true);
+      }
+    } catch (e) { showToast('Connection problem. Try again.', true); }
+  }
+
+  async function postAction(payload) {
+    // Body sent as a plain string keeps this a CORS-simple request (avoids
+    // a preflight OPTIONS call, which Apps Script web apps don't handle).
+    const res = await fetch(APP_URL, { method: 'POST', body: JSON.stringify(payload) });
+    return res.json();
+  }
+
+  // ---------- SHEET / TOAST ----------
+  function showSheet(html) {
+    document.getElementById('sheetContent').innerHTML = html;
+    document.getElementById('overlay').classList.remove('hidden');
+  }
+  function closeSheet() { document.getElementById('overlay').classList.add('hidden'); }
+  document.getElementById('overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'overlay') closeSheet();
+  });
+
+  let toastTimer;
+  function showToast(msg, isError) {
+    const toast = document.getElementById('toast');
+    toast.className = 'toast' + (isError ? ' error' : '');
+    toast.innerHTML = isError
+      ? `<span>${escapeHtml(msg)}</span>`
+      : `<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+           <circle cx="10" cy="10" r="9" stroke="white" stroke-width="1.5"/>
+           <path class="check" d="M6 10l3 3 5-6" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+         </svg><span>${escapeHtml(msg)}</span>`;
+    requestAnimationFrame(() => toast.classList.add('show'));
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+  }
+
+  document.getElementById('helpBtn').addEventListener('click', () => {
+    showSheet(`
+      <h3>How this works</h3>
+      <p><strong>Pick your name</strong> once at the top — type to search, tap to select. It stays selected for your visit.</p>
+      <p>Each date shows two rows: <span class="tag-chip tag-Listening">L</span> Listening and <span class="tag-chip tag-Support">S</span> Support.</p>
+      <p><strong>Tap any open row's date</strong> to claim it — you'll only be offered roles you're set up for.</p>
+      <p>You can hold only <strong>one role per date</strong>, even if you're eligible for both.</p>
+      <p><strong>Tap a date where you're already on</strong> to:</p>
+      <p style="margin-top:-10px;">
+        <strong>Swap</strong> — trade with another volunteer in the same role<br>
+        <strong>Replace</strong> — hand your date to someone else in the same role<br>
+        <strong>Remove yourself</strong> — that row goes back to open
+      </p>
+      <p><strong>Switch months</strong> using the tabs at the top. Use <strong>Previous months</strong> to look back at earlier months (read-only); <strong>Back to current</strong> returns you to today's view.</p>
+      <p style="margin-bottom:0;">Past dates are shown but can't be changed.</p>
+      <div class="sheet-actions" style="margin-top:16px;"><button class="btn btn-primary" id="cancelSheetBtn">Got it</button></div>
+    `);
+    bindCancel();
+  });
+
+  let isRefreshing = false;
+  async function refreshData(announce) {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    const btn = document.getElementById('refreshBtn');
+    if (btn) { btn.disabled = true; btn.classList.add('spinning'); }
+    try {
+      const res = await fetch(APP_URL);
+      const json = await res.json();
+      if (json.success) {
+        volunteers = json.data.volunteers;
+        roster = json.data.roster;
+        if (!currentVolunteer) setupIdentityCombobox();
+        renderMonthNav();
+        renderTabs();
+        renderCalendar();
+        if (announce) showToast('Refreshed.');
+      }
+    } catch (e) {
+      if (announce) showToast('Could not refresh. Try again.', true);
+    } finally {
+      isRefreshing = false;
+      if (btn) { btn.disabled = false; btn.classList.remove('spinning'); }
+    }
+  }
+
+  document.getElementById('refreshBtn').addEventListener('click', () => refreshData(true));
+
+  // Quietly catch up when the tab/app regains focus — e.g. someone switches
+  // to WhatsApp to arrange a swap, then comes back. No toast, so the screen
+  // doesn't announce itself while someone's mid-read.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshData(false);
+  });
+
+  loadData();
+</script>
+</body>
+</html>
