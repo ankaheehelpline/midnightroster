@@ -241,7 +241,7 @@
 <body>
 
 <header class="topbar">
-  <img src="Logo.png" alt="Ankahee logo" onerror="this.style.display='none'">
+  <img id="logo" alt="Ankahee logo" hidden>
   <div class="titles">
     <h1>Midnight Roster</h1>
     <p>10pm – 12am shift · Listening &amp; Support</p>
@@ -290,6 +290,20 @@
 <div id="toast" class="toast"></div>
 
 <script>
+(function () {
+  const DEFAULT_LOGO = 'https://ankaheehelpline.github.io/landing/logo.jpg';
+  let logo = '';
+  try {
+    const p = new URLSearchParams(location.search).get('logo');
+    if (p) localStorage.setItem('hubLogo', p);
+    logo = p || localStorage.getItem('hubLogo') || '';
+  } catch (e) {}
+  const img = document.getElementById('logo');
+  img.addEventListener('load', () => { img.hidden = false; });
+  img.addEventListener('error', () => { img.hidden = true; });
+  img.src = logo || DEFAULT_LOGO;
+})();
+  
   const APP_URL = 'https://script.google.com/macros/s/AKfycbw2vU4QBqcU5m0PzmGyuYjgcF02m-5NDJQnioRTlZadhNXwWTTKpYxV6rRKTkMoRq8/exec';
   const NAME_KEY = 'ankahee_volunteer_name';
   const LAUNCH_DATE = '2026-09-10'; // hardcoded start date for the shift
